@@ -1,0 +1,54 @@
+name: build-dict
+
+# 词库产物不入库：每次运行从上游拉源文件打包，覆盖固定 tag `data` 的
+# Release 附件，下载地址永久稳定。tar 固定 mtime/属主，同输入 → 同 sha256。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  UP_BASE: https://raw.githubusercontent.com/fcitx5-android/prebuilt/master/libime/data
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch upstream libime data
+        run: |
+          mkdir dist
+          curl -fsSL --retry 5 --retry-delay 5 -o dist/sc.dict "$UP_BASE/sc.dict"
+          curl -fsSL --retry 5 --retry-delay 5 -o dist/zh_CN.lm "$UP_BASE/zh_CN.lm"
+
+      - name: Pack deterministic tar.bz2
+        run: |
+          tar --sort=name --mtime='2020-01-01 UTC' --owner=0 --group=0 --numeric-owner \
+              -cjf pinyin-dict.tar.bz2 -C dist sc.dict zh_CN.lm
+          sha256sum pinyin-dict.tar.bz2 | tee sha256.txt
+          stat -c '%s' pinyin-dict.tar.bz2 > size.txt
+
+      - name: Upload to release (tag: data)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view data -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create data -R "$GITHUB_REPOSITORY" \
+              --title "拼音词库构建产物" \
+              --notes "由 GitHub Actions 从上游 fcitx5-android/prebuilt (libime/data) 自动打包，含 sc.dict + zh_CN.lm。"
+          fi
+          gh release upload data pinyin-dict.tar.bz2 --clobber -R "$GITHUB_REPOSITORY"
+
+      - name: Summary
+        run: |
+          {
+            echo "## pinyin-dict.tar.bz2"
+            echo "- URL: https://github.com/${GITHUB_REPOSITORY}/releases/download/data/pinyin-dict.tar.bz2"
+            echo "- sha256: \`$(cut -d' ' -f1 sha256.txt)\`"
+            echo "- size: $(cat size.txt) bytes"
+            echo "- 上游源: $UP_BASE"
+          } >> "$GITHUB_STEP_SUMMARY"
