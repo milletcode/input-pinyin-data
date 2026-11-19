@@ -32,7 +32,7 @@ jobs:
           sha256sum pinyin-dict.tar.bz2 | tee sha256.txt
           stat -c '%s' pinyin-dict.tar.bz2 > size.txt
 
-      - name: Upload to release (tag: data)
+      - name: Upload release asset
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
