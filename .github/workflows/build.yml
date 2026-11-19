@@ -36,12 +36,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if ! gh release view data -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release create data -R "$GITHUB_REPOSITORY" \
-              --title "拼音词库构建产物" \
-              --notes "由 GitHub Actions 从上游 fcitx5-android/prebuilt (libime/data) 自动打包，含 sc.dict + zh_CN.lm。"
-          fi
-          gh release upload data pinyin-dict.tar.bz2 --clobber -R "$GITHUB_REPOSITORY"
+          # 每次全量重建（连 tag），确保 tag 始终钉在 main HEAD、产物不残留旧版本；
+          # URL 只含 tag 名 data，重建后地址不变
+          gh release delete data -y --cleanup-tag -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || true
+          gh release create data pinyin-dict.tar.bz2 -R "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "拼音词库构建产物" \
+            --notes "由 GitHub Actions 从上游 fcitx5-android/prebuilt (libime/data) 自动打包，含 sc.dict + zh_CN.lm。"
 
       - name: Summary
         run: |
